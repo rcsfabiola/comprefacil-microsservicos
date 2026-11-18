@@ -5,14 +5,15 @@ services:
   # Banco de dados PostgreSQL.
   # O script em ./docker/postgres cria um banco separado para cada serviço
   # (payment_db e notification_db).
+  # Ele não expõe porta no computador: só os serviços, pela rede interna
+  # do Docker, acessam o banco. Assim não há conflito com um Postgres
+  # que já esteja instalado na máquina.
   postgres:
     image: postgres:16-alpine
     container_name: comprefacil-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
     volumes:
       - ./docker/postgres:/docker-entrypoint-initdb.d
       - postgres-data:/var/lib/postgresql/data

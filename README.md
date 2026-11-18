@@ -267,7 +267,7 @@ Formato da mensagem:
 
 ## Executar sem Docker (opcional)
 
-Com Postgres e RabbitMQ rodando (por exemplo, só eles via `docker compose up postgres rabbitmq`):
+É preciso um PostgreSQL rodando no computador, com os bancos `payment_db` e `notification_db` criados (o script `docker/postgres/01-criar-bancos.sql` faz isso), e o RabbitMQ (pode ser só ele via `docker compose up rabbitmq`):
 
 ```bash
 cd payment-service
@@ -284,6 +284,8 @@ npm start
 ```
 
 As configurações padrão estão nos arquivos `.env.example` de cada serviço.
+
+> No docker-compose, o Postgres **não expõe porta no computador**: só os dois serviços, pela rede interna do Docker, acessam o banco. Isso evita conflito com um PostgreSQL que já esteja instalado na máquina (porta 5432 ocupada).
 
 ## Estrutura do projeto
 
