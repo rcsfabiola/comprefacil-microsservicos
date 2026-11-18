@@ -1,21 +1,23 @@
-// Monta e publica as mensagens destinadas ao serviço de notificação.
-const config = require('./config');
-const { publish } = require('./rabbitmq');
+// Publica os eventos de transação na exchange "comprefacil.eventos".
+// O serviço de notificação recebe esses eventos porque ligou a sua fila
+// à exchange com o padrão "transacao.#".
+const { publishEvent } = require('./rabbitmq');
 
-// Tipos de evento que o serviço de notificação sabe tratar
+// Cada evento tem um nome (lido pelo consumidor) e uma chave de
+// roteamento (usada pela exchange para decidir para quais filas enviar)
 const EVENTS = {
-  RECEBIDA: 'TRANSACAO_RECEBIDA',
-  CONFIRMADA: 'TRANSACAO_CONFIRMADA',
+  RECEBIDA: { name: 'TRANSACAO_RECEBIDA', routingKey: 'transacao.recebida' },
+  CONFIRMADA: { name: 'TRANSACAO_CONFIRMADA', routingKey: 'transacao.confirmada' },
 };
 
 function notify(event, transaction) {
   const message = {
-    event,
+    event: event.name,
     sentAt: new Date().toISOString(),
     transaction,
   };
-  publish(config.notificationQueue, message);
-  console.log(`[pagamento] Mensagem ${event} publicada na fila "${config.notificationQueue}" (transação ${transaction.id})`);
+  publishEvent(event.routingKey, message);
+  console.log(`[pagamento] Evento ${event.name} publicado com a chave "${event.routingKey}" (transação ${transaction.id})`);
 }
 
 module.exports = { EVENTS, notify };

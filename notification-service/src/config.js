@@ -9,6 +9,18 @@ module.exports = {
 
   rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://admin:admin@localhost:5672',
 
-  // Fila de onde o serviço lê as mensagens publicadas pelo pagamento
+  // Exchange onde o pagamento publica os eventos
+  eventsExchange: process.env.EVENTS_EXCHANGE || 'comprefacil.eventos',
+
+  // Fila própria do serviço de notificação, ligada à exchange
   notificationQueue: process.env.NOTIFICATION_QUEUE || 'notificacoes',
+
+  // Padrão de chave de roteamento: "#" significa "qualquer coisa depois",
+  // então a fila recebe transacao.recebida, transacao.confirmada e
+  // qualquer evento de transação que venha a ser criado no futuro.
+  bindingKey: process.env.BINDING_KEY || 'transacao.#',
+
+  // Política de novas tentativas quando o envio falha
+  maxAttempts: Number(process.env.MAX_ATTEMPTS || 3),
+  retryDelayMs: Number(process.env.RETRY_DELAY_MS || 2000),
 };

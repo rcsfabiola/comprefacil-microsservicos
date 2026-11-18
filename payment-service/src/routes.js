@@ -2,8 +2,9 @@
 const express = require('express');
 const config = require('./config');
 const db = require('./db');
-const { publish } = require('./rabbitmq');
+const { sendToQueue } = require('./rabbitmq');
 const { EVENTS, notify } = require('./notifications');
+const { validateTransaction } = require('./validation');
 
 const router = express.Router();
 
@@ -11,15 +12,10 @@ const router = express.Router();
 // Responde na hora com status 202 (Accepted) e o pagamento segue
 // sendo processado de forma assíncrona.
 router.post('/transactions', async (req, res) => {
-  const { userId, userEmail, orderNumber, amount } = req.body || {};
-
-  // Validação simples dos dados recebidos
-  const errors = [];
-  if (!userId) errors.push('userId é obrigatório');
-  if (!userEmail || !String(userEmail).includes('@')) errors.push('userEmail inválido');
-  if (!orderNumber) errors.push('orderNumber é obrigatório');
-  if (!(Number(amount) > 0)) errors.push('amount deve ser um número maior que zero');
+  const errors = validateTransaction(req.body);
   if (errors.length) return res.status(400).json({ errors });
+
+  const { userId, userEmail, orderNumber, amount } = req.body;
 
   try {
     // Passo I: armazena a transação com status PENDENTE
@@ -31,13 +27,13 @@ router.post('/transactions', async (req, res) => {
     });
     console.log(`[pagamento] Transação ${transaction.id} recebida e gravada (status PENDENTE)`);
 
-    // Passo II: publica mensagem para o serviço de notificação
+    // Passo II: publica o evento para o serviço de notificação
     // informar o recebimento da solicitação
     notify(EVENTS.RECEBIDA, transaction);
 
     // Envia a transação para a fila interna de processamento.
     // A confirmação (passos IV e V) acontece depois, no processor.js.
-    publish(config.processingQueue, { transactionId: transaction.id });
+    sendToQueue(config.processingQueue, { transactionId: transaction.id });
 
     return res.status(202).json({
       message: 'Solicitação de transação recebida. O pagamento será processado.',

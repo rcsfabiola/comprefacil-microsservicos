@@ -47,9 +47,11 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/payment_db
       RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
-      NOTIFICATION_QUEUE: notificacoes
+      EVENTS_EXCHANGE: comprefacil.eventos
       PROCESSING_QUEUE: pagamentos.processar
       PROCESSING_DELAY_MS: 5000
+      MAX_ATTEMPTS: 3
+      RETRY_DELAY_MS: 2000
     ports:
       - "3000:3000"
     depends_on:
@@ -67,7 +69,11 @@ services:
       PORT: 3001
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/notification_db
       RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
+      EVENTS_EXCHANGE: comprefacil.eventos
       NOTIFICATION_QUEUE: notificacoes
+      BINDING_KEY: "transacao.#"
+      MAX_ATTEMPTS: 3
+      RETRY_DELAY_MS: 2000
     ports:
       - "3001:3001"
     depends_on:

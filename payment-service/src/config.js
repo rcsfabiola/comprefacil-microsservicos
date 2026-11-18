@@ -12,8 +12,10 @@ module.exports = {
   // Endereço do RabbitMQ (sistema de mensageria)
   rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://admin:admin@localhost:5672',
 
-  // Fila onde o pagamento publica mensagens para o serviço de notificação
-  notificationQueue: process.env.NOTIFICATION_QUEUE || 'notificacoes',
+  // Exchange do tipo "topic" onde o pagamento publica os seus eventos
+  // (transacao.recebida e transacao.confirmada). O pagamento não sabe
+  // quem vai consumir: cada serviço interessado liga a sua própria fila.
+  eventsExchange: process.env.EVENTS_EXCHANGE || 'comprefacil.eventos',
 
   // Fila interna do próprio serviço de pagamento, usada para processar
   // (confirmar) as transações de forma assíncrona
@@ -22,4 +24,8 @@ module.exports = {
   // Tempo (em milissegundos) que simula o processamento do pagamento,
   // por exemplo a consulta à operadora do cartão
   processingDelayMs: Number(process.env.PROCESSING_DELAY_MS || 5000),
+
+  // Política de novas tentativas quando o processamento falha
+  maxAttempts: Number(process.env.MAX_ATTEMPTS || 3),
+  retryDelayMs: Number(process.env.RETRY_DELAY_MS || 2000),
 };

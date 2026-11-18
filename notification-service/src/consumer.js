@@ -3,24 +3,37 @@
 const config = require('./config');
 const db = require('./db');
 const { getChannel } = require('./rabbitmq');
-
-// Texto da notificação para cada tipo de evento
-function buildMessage(event, t) {
-  const valor = Number(t.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  switch (event) {
-    case 'TRANSACAO_RECEBIDA':
-      return `Olá! Recebemos a sua solicitação de pagamento do pedido ${t.orderNumber}, no valor de ${valor}. Ela está sendo processada.`;
-    case 'TRANSACAO_CONFIRMADA':
-      return `Pagamento confirmado! O pagamento do pedido ${t.orderNumber}, no valor de ${valor}, foi aprovado. Obrigado por comprar na CompreFácil.`;
-    default:
-      return null;
-  }
-}
+const { buildMessage } = require('./messages');
+const { retryOrDeadLetter } = require('./retry');
 
 // Simula o envio da notificação (por exemplo, um e-mail).
 // Em produção, aqui entraria a integração com um provedor de e-mail ou SMS.
 function sendNotification(destination, text) {
   console.log(`[notificacao] >>> Enviando e-mail para ${destination}: "${text}"`);
+}
+
+// Regra de negócio do consumidor, separada do RabbitMQ para poder ser
+// testada sozinha (ver __tests__/consumer.test.js).
+// Retorna "ENVIADA", "DUPLICADA" ou "DESCONHECIDA".
+async function handleNotification({ event, transaction }, deps) {
+  if (!transaction || !transaction.id) throw new Error('Mensagem sem dados da transação');
+
+  const text = buildMessage(event, transaction);
+  if (!text) return 'DESCONHECIDA';
+
+  // Registra a notificação; se ela já existir, não envia de novo
+  const saved = await deps.db.saveNotification({
+    transactionId: transaction.id,
+    userId: transaction.userId,
+    destination: transaction.userEmail,
+    type: event,
+    message: text,
+  });
+
+  if (!saved) return 'DUPLICADA';
+
+  deps.send(transaction.userEmail, text);
+  return 'ENVIADA';
 }
 
 async function startConsumer() {
@@ -31,40 +44,30 @@ async function startConsumer() {
     if (!msg) return;
 
     try {
-      const { event, transaction } = JSON.parse(msg.content.toString());
-      console.log(`[notificacao] Mensagem ${event} lida da fila (transação ${transaction.id})`);
+      const payload = JSON.parse(msg.content.toString());
+      console.log(`[notificacao] Evento ${payload.event} recebido com a chave "${msg.fields.routingKey}"`);
 
-      const text = buildMessage(event, transaction);
-      if (!text) {
-        console.log(`[notificacao] Evento desconhecido "${event}". Mensagem descartada.`);
-        return channel.ack(msg);
-      }
+      const result = await handleNotification(payload, { db, send: sendNotification });
 
-      // Registra a notificação; se ela já existir, não envia de novo
-      const saved = await db.saveNotification({
-        transactionId: transaction.id,
-        userId: transaction.userId,
-        destination: transaction.userEmail,
-        type: event,
-        message: text,
-      });
-
-      if (saved) {
-        sendNotification(transaction.userEmail, text);
-      } else {
+      if (result === 'DESCONHECIDA') {
+        console.log(`[notificacao] Evento desconhecido "${payload.event}". Mensagem descartada.`);
+      } else if (result === 'DUPLICADA') {
         console.log('[notificacao] Notificação já enviada anteriormente. Ignorando mensagem repetida.');
       }
 
       channel.ack(msg);
     } catch (err) {
-      console.error('[notificacao] Erro ao processar mensagem:', err.message);
-      // Espera 2 segundos e devolve a mensagem para a fila, para tentar de novo
-      await new Promise((r) => setTimeout(r, 2000));
-      channel.nack(msg, false, true);
+      // Tenta de novo até o limite; depois envia para a fila de erros
+      await retryOrDeadLetter(channel, msg, config.notificationQueue, {
+        maxAttempts: config.maxAttempts,
+        baseDelayMs: config.retryDelayMs,
+        error: err.message,
+        log: (text) => console.error(`[notificacao] ${text}`),
+      });
     }
   });
 
   console.log(`[notificacao] Aguardando mensagens na fila "${config.notificationQueue}"`);
 }
 
-module.exports = { startConsumer };
+module.exports = { startConsumer, handleNotification, sendNotification };
