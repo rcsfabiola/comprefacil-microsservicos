@@ -2,7 +2,7 @@
 
 Desafio da Unidade Curricular **Desenvolvimento de Sistemas Distribuídos**
 Curso Superior de Tecnologia em Análise e Desenvolvimento de Sistemas – UniSENAI SC
-Autora: Fabíola Reginaldo Corrêa da Silva
+Autoras: Daiane Olete da Silva Maniçoba e Fabíola Reginaldo Corrêa da Silva
 
 Este projeto implementa dois microsserviços independentes em **Node.js**, que se comunicam de forma **assíncrona** por meio do **RabbitMQ** (protocolo AMQP):
 
@@ -95,7 +95,20 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3000/transactions `
   -Body '{"userId":"10","userEmail":"cliente@teste.com.br","orderNumber":"PED-1001","amount":259.90}'
 ```
 
-Também é possível usar o **Postman** ou o **Insomnia**: método `POST`, URL `http://localhost:3000/transactions`, corpo (Body) do tipo JSON com os mesmos dados.
+**Thunder Client (extensão do VS Code), Postman ou Insomnia:**
+
+- Método: `POST`
+- URL: `http://localhost:3000/transactions`
+- Em **Body**, selecionar **JSON** e enviar:
+
+```json
+{
+  "userId": "10",
+  "userEmail": "cliente@teste.com.br",
+  "orderNumber": "PED-1001",
+  "amount": 259.90
+}
+```
 
 Resposta esperada (HTTP 202), com o status ainda **PENDENTE**:
 
@@ -147,7 +160,7 @@ No terminal do `docker compose up`, o fluxo aparece assim:
 
 ### 5. Painel do RabbitMQ
 
-Acesse http://localhost:15672 (usuário `admin`, senha `admin`):
+Acesse http://localhost:15673 (usuário `admin`, senha `admin`):
 
 - aba **Exchanges** → `comprefacil.eventos` (tipo `topic`) e, em *Bindings*, a ligação com a fila `notificacoes` pela chave `transacao.#`;
 - aba **Queues** → `notificacoes`, `pagamentos.processar` e as filas de erros `*.dlq`.
@@ -221,6 +234,7 @@ Resultado: 19 testes, todos passando.
 | POST | `/transactions` | Solicita uma transação. Corpo: `userId`, `userEmail`, `orderNumber`, `amount` |
 | GET | `/transactions/:id` | Consulta uma transação (status `PENDENTE` ou `SUCESSO`) |
 | GET | `/transactions` | Lista as últimas transações |
+| GET | `/` | Mostra que o serviço está no ar e lista as rotas |
 | GET | `/health` | Verifica se o serviço está no ar |
 
 ### notification-service (porta 3001)
@@ -228,6 +242,7 @@ Resultado: 19 testes, todos passando.
 | Método | Rota | Descrição |
 | --- | --- | --- |
 | GET | `/notifications` | Lista as notificações enviadas. Filtros opcionais: `?userId=` e `?transactionId=` |
+| GET | `/` | Mostra que o serviço está no ar e lista as rotas |
 | GET | `/health` | Verifica se o serviço está no ar |
 
 ### Eventos AMQP (exchange `comprefacil.eventos`)
@@ -264,6 +279,8 @@ Formato da mensagem:
 - **Novas tentativas com backoff e fila de erros (DLQ):** falhas temporárias são tentadas de novo; falhas permanentes vão para análise, sem travar a fila.
 - **Proteção contra duplicidade (idempotência):** a confirmação só altera transações que ainda estão `PENDENTE`, e a tabela de notificações tem uma restrição `UNIQUE (transaction_id, type)`. Assim, se uma mensagem chegar repetida, o usuário não recebe a mesma notificação duas vezes.
 - **Reconexão na inicialização:** os serviços tentam conectar ao banco e ao RabbitMQ várias vezes, porque esses containers podem demorar alguns segundos para ficar prontos.
+- **Desligamento limpo:** ao receber o sinal de parada (`docker compose stop` ou `Ctrl + C`), cada serviço fecha as conexões e encerra. Uma mensagem que estava em processamento não recebe `ack` e volta para a fila, sendo tratada quando o serviço voltar.
+- **Portas sem conflito:** o Postgres não expõe porta no computador, e o RabbitMQ usa as portas 5673 e 15673 (em vez das padrão 5672 e 15672). Assim o projeto sobe mesmo em máquinas que já têm PostgreSQL ou RabbitMQ instalados.
 
 ## Executar sem Docker (opcional)
 
@@ -285,7 +302,7 @@ npm start
 
 As configurações padrão estão nos arquivos `.env.example` de cada serviço.
 
-> No docker-compose, o Postgres **não expõe porta no computador**: só os dois serviços, pela rede interna do Docker, acessam o banco. Isso evita conflito com um PostgreSQL que já esteja instalado na máquina (porta 5432 ocupada).
+> No docker-compose, o Postgres **não expõe porta no computador**: só os dois serviços, pela rede interna do Docker, acessam o banco. Isso evita conflito com um PostgreSQL que já esteja instalado na máquina (porta 5432 ocupada). Se usar o RabbitMQ do docker-compose com os serviços rodando fora do Docker, use `RABBITMQ_URL=amqp://admin:admin@localhost:5673`.
 
 ## Estrutura do projeto
 
@@ -324,4 +341,4 @@ comprefacil-microsservicos/
 
 ## Tecnologias
 
-Node.js 20, Express, amqplib, node-postgres (pg), Jest, PostgreSQL 16, RabbitMQ 3 e Docker Compose.
+Node.js 20, Express 5, amqplib 2, node-postgres (pg), Jest, PostgreSQL 16, RabbitMQ 3 e Docker Compose.

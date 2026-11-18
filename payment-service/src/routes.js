@@ -62,6 +62,15 @@ router.get('/transactions', async (req, res) => {
   res.json(transactions);
 });
 
+// Rota inicial: mostra que o serviço está no ar e quais rotas existem
+router.get('/', (req, res) => {
+  res.json({
+    service: 'payment-service',
+    message: 'Serviço de pagamento funcionando!',
+    routes: ['POST /transactions', 'GET /transactions', 'GET /transactions/:id', 'GET /health'],
+  });
+});
+
 // Verificação de saúde do serviço
 router.get('/health', (req, res) => {
   res.json({ service: 'payment-service', status: 'ok' });

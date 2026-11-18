@@ -24,7 +24,10 @@ services:
       retries: 10
 
   # Sistema de mensageria RabbitMQ.
-  # Painel de administração: http://localhost:15672 (usuário admin / senha admin)
+  # Painel de administração: http://localhost:15673 (usuário admin / senha admin)
+  # No computador, usa as portas 5673 e 15673 (em vez das padrão 5672 e 15672)
+  # para não conflitar com um RabbitMQ que já esteja instalado na máquina.
+  # Dentro da rede do Docker, os serviços continuam usando a porta 5672.
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: comprefacil-rabbitmq
@@ -32,8 +35,8 @@ services:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: admin
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5673:5672"
+      - "15673:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s

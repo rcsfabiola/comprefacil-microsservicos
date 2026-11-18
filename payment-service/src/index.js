@@ -29,9 +29,21 @@ async function main() {
   app.use(express.json());
   app.use(routes);
 
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     console.log(`[pagamento] API REST disponível em http://localhost:${config.port}`);
   });
+
+  // Desligamento limpo: ao receber o sinal de parada (docker compose stop,
+  // Ctrl + C), para de aceitar requisições, fecha o banco e encerra.
+  // Uma transação que estava sendo processada não é confirmada ao RabbitMQ
+  // (ack) e volta para a fila, sendo processada quando o serviço voltar.
+  const shutdown = (signal) => {
+    console.log(`[pagamento] Sinal ${signal} recebido. Encerrando o serviço...`);
+    server.close();
+    db.pool.end().finally(() => process.exit(0));
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 main().catch((err) => {

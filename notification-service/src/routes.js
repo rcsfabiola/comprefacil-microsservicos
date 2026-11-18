@@ -18,6 +18,16 @@ router.get('/notifications', async (req, res) => {
   }
 });
 
+// Rota inicial: mostra que o serviço está no ar e quais rotas existem
+router.get('/', (req, res) => {
+  res.json({
+    service: 'notification-service',
+    message: 'Serviço de notificação funcionando!',
+    routes: ['GET /notifications', 'GET /notifications?userId=10', 'GET /health'],
+  });
+});
+
+// Verificação de saúde do serviço
 router.get('/health', (req, res) => {
   res.json({ service: 'notification-service', status: 'ok' });
 });
