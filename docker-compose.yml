@@ -1,0 +1,81 @@
+# Infraestrutura da CompreFácil: banco de dados, mensageria e os dois microsserviços.
+# Para subir tudo:  docker compose up --build
+
+services:
+  # Banco de dados PostgreSQL.
+  # O script em ./docker/postgres cria um banco separado para cada serviço
+  # (payment_db e notification_db).
+  postgres:
+    image: postgres:16-alpine
+    container_name: comprefacil-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/postgres:/docker-entrypoint-initdb.d
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Sistema de mensageria RabbitMQ.
+  # Painel de administração: http://localhost:15672 (usuário admin / senha admin)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: comprefacil-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # Microsserviço de pagamento (REST na porta 3000 + AMQP)
+  payment-service:
+    build: ./payment-service
+    container_name: comprefacil-payment
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/payment_db
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
+      NOTIFICATION_QUEUE: notificacoes
+      PROCESSING_QUEUE: pagamentos.processar
+      PROCESSING_DELAY_MS: 5000
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  # Microsserviço de notificação (REST na porta 3001 + AMQP)
+  notification-service:
+    build: ./notification-service
+    container_name: comprefacil-notification
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/notification_db
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
+      NOTIFICATION_QUEUE: notificacoes
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  postgres-data:
